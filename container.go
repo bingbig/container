@@ -18,7 +18,26 @@ func init() {
 
 func nsInitialisation() {
 	fmt.Printf("\n>> namespace setup code goes here <<\n\n")
+
+	setMount("/root/containerFS")
+
 	nsRun()
+}
+
+func setMount(root string) error {
+	if err := syscall.Chroot(root); err != nil {
+		return err
+	}
+	// 设置容器里面的当前工作目录
+	if err := syscall.Chdir("/"); err != nil {
+		return err
+	}
+
+	if err := syscall.Mount("proc", "proc", "proc", 0, ""); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func nsRun() {
@@ -34,6 +53,8 @@ func nsRun() {
 		fmt.Printf("Error running the %s command - %s\n", os.Args[1], err)
 		os.Exit(1)
 	}
+
+	syscall.Unmount("/proc", 0)
 }
 
 func main() {
@@ -67,6 +88,7 @@ func run() {
 			syscall.CLONE_NEWPID |
 			syscall.CLONE_NEWNET |
 			syscall.CLONE_NEWUSER,
+		Unshareflags: syscall.CLONE_NEWNS,
 		UidMappings: []syscall.SysProcIDMap{
 			{
 				ContainerID: 0,
