@@ -28,6 +28,11 @@ func nsInitialisation() {
 		os.Exit(1)
 	}
 
+	if err := syscall.Sethostname([]byte("container")); err != nil {
+		fmt.Printf("Error setting hostname - %s\n", err)
+		os.Exit(1)
+	}
+
 	nsRun()
 }
 
