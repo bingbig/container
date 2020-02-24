@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"syscall"
+	"time"
 
 	"github.com/docker/docker/pkg/reexec"
 )
@@ -20,6 +22,11 @@ func nsInitialisation() {
 	fmt.Printf("\n>> namespace setup code goes here <<\n\n")
 
 	setMount("/root/containerFS")
+
+	if err := waitForNetwork(); err != nil {
+		fmt.Printf("Error waiting for network - %s\n", err)
+		os.Exit(1)
+	}
 
 	nsRun()
 }
@@ -38,6 +45,31 @@ func setMount(root string) error {
 	}
 
 	return nil
+}
+
+func waitForNetwork() error {
+	maxWait := time.Second * 3
+	checkInterval := time.Second
+	timeStarted := time.Now()
+
+	for {
+		interfaces, err := net.Interfaces()
+		if err != nil {
+			return err
+		}
+
+		// pretty basic check ...
+		// > 1 as a lo device will already exist
+		if len(interfaces) > 1 {
+			return nil
+		}
+
+		if time.Since(timeStarted) > maxWait {
+			return fmt.Errorf("Timeout after %s waiting for network", maxWait)
+		}
+
+		time.Sleep(checkInterval)
+	}
 }
 
 func nsRun() {
@@ -105,7 +137,19 @@ func run() {
 		},
 	}
 
-	if err := cmd.Run(); err != nil {
+	if err := cmd.Start(); err != nil {
+		fmt.Printf("Error starting the reexec.Command - %s\n", err)
+		os.Exit(1)
+	}
+
+	pid := fmt.Sprintf("%d", cmd.Process.Pid)
+	netsetgoCmd := exec.Command("/usr/local/bin/netsetgo", "-pid", pid)
+	if err := netsetgoCmd.Run(); err != nil {
+		fmt.Printf("Error running netsetgo - %s\n", err)
+		os.Exit(1)
+	}
+
+	if err := cmd.Wait(); err != nil {
 		fmt.Printf("Error running the reexec.Command - %s\n", err)
 		os.Exit(1)
 	}
