@@ -2,9 +2,12 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -33,7 +36,22 @@ func nsInitialisation() {
 		os.Exit(1)
 	}
 
+	set_cgroups()
+
 	nsRun()
+}
+
+func set_cgroups() {
+	cgroups := "/sys/fs/cgroup/"
+	pids := filepath.Join(cgroups, "pids")
+	os.MkdirAll(filepath.Join(pids, "ourContainer"), 0755)
+	ioutil.WriteFile(filepath.Join(pids, "ourContainer/pids.max"), []byte("10"), 0700)
+	//up here we limit the number of child processes to 10
+
+	ioutil.WriteFile(filepath.Join(pids, "ourContainer/notify_on_release"), []byte("1"), 0700)
+
+	ioutil.WriteFile(filepath.Join(pids, "ourContainer/cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0700)
+	// up here we write container PIDs to cgroup.procs
 }
 
 func setMount(root string) error {
